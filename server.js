@@ -1,104 +1,62 @@
 var express=require('express')
-var jwt=require("jsonwebtoken")
-var mongoClient=require('mongodb').MongoClient
-var cors=require('cors')
-var axios=require('axios')
+var mongoose=require('mongoose')
+
 var app=express()
-app.use(cors())
 app.use(express.json())
 
-
-mongoClient.connect("mongodb://localhost:27017",(err,client)=>{
-    if(err){
-        console.log(err)
-    }
-    else{
-        db=client.db('empdb')
-    }
+// connect to mongo
+mongoose.connect("mongodb://localhost:27017/empdb")
+var db=mongoose.connection
+// checking connection
+db.on("error",()=>{
+    console.log("Error in connection")
 })
 
+db.once("open",()=>{
+    console.log("Connection established")
+})
 
-app.get('/emps',(req,res)=>{
-    db.collection('emp').find().toArray((err,items)=>{
-        res.write(JSON.stringify(items))
-        res.end()
+var empSchema=new mongoose.Schema({
+    name:String,
+    salary:Number,
+    age:Number
+})
+var empModel=mongoose.model("emp",empSchema,"emp")
+
+
+app.post("/addemp",(req,res)=>{
+    const data = new empModel({
+        name: req.body.name,
+        salary:req.body.salary,
+        age: req.body.age
     })
-})
-
-app.post('/addemp',(req,res)=>{
-    db.collection('emp').insertOne(req.body)
-    res.end("Inserted")
-})
-
-app.put('/updateemp/:id',(req,res)=>{
-    var id=parseInt(req.params.id)
-    db.collection('emp').updateOne({"_id":id},{$set:{age:req.body.age}})
-    res.end("updated")
-})
-
-app.delete('/deleteemp/:id',(req,res)=>{
-    var id=(req.params.id)
-    db.collection('emp').deleteOne({"_id":id})
-    res.send("Deleted")
-})
-app.get('/emp/:id',(req,res)=>{
-    
-    var id=parseInt(req.params.id)
-    console.log(id)    
-db.collection('emp').find({"_id":id}).toArray((err,items)=>{
-    res.json(items)
+    data.save()
     res.end()
 })
-})
-
-app.get('/login.html',(req,res)=>{
-    res.sendFile('login.html',{root:__dirname})
-})
-app.get('/index.html',(req,res)=>{
-    res.sendFile('index.html',{root:__dirname})
-})
-
-app.post('/login',(req,res)=>{
-    username=req.body.username
-    pwd=req.body.password
-    db.collection("users").findOne({"username":username,"pwd":pwd})
-    .then((item)=>{
-         if(item){
-            const token=jwt.sign({"username":username},"cvrcollege");
-            res.json({success:true,message:"authentication successful",token:token});
-            res.end();
-        }
-        else{
-            const token=jwt.sign({"username":username},"cvrcollege");
-            res.json({success:false,message:"No username and password"});
-            res.end()
-        }
+// res.send("Hello world")
+app.get("/emps",(req,res)=>{
+    empModel.find({},function(err,result){
+        res.send(result)
     })
-    .catch((err)=>{
-    console.log("error",err)
+})
+app.delete("/deleteemp/:name",(req,res)=>{
+    empModel.remove({
+        name:req.params.name,
+    },(err,result)=>{
+        res.send(result)
     })
 })
 
-function verifyToken(req,res,next){
-    let token=req.headers['authorization']
-    if(token){
-        token=token.split(' ')[1]
-        console.log(token)
-        jwt.verify(token,"cvrcollege",(err,decoded)=>{
-            if(err){
-                return res.json({success:false,message:'Token not valid'});
-            }
-            else{
-                next();
-            }
-        })
-    }
-    else{
-        return res.json({success:false,message:"A token is required for Authorization"});
-    }
-}
+app.put("/updateemp/:name",(req,res)=>{
+    empModel.update({
+        name:req.params.name},req.body,(err,result)=>{
+            res.send(result)
+    })
+})
 
+app.get('/index', function(req, res) {
+    res.sendFile("../index.html",__dirname);
+ })
 app.listen(2000,()=>{
     console.log("Server started")
 })
-
